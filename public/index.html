@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Solar Monitor</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        max-width: 700px;
+        margin: 40px auto;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+      }
+      .card {
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 16px;
+      }
+      .card h3 {
+        margin: 0;
+        font-size: 14px;
+        color: #666;
+      }
+      .card p {
+        margin: 8px 0 0;
+        font-size: 32px;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Solar Monitor</h1>
+    <div class="cards">
+      <div class="card">
+        <h3>Light (lux)</h3>
+        <p id="lux">-</p>
+      </div>
+      <div class="card">
+        <h3>Voltage (V)</h3>
+        <p id="volt">-</p>
+      </div>
+      <div class="card">
+        <h3>Current (A)</h3>
+        <p id="amp">-</p>
+      </div>
+      <div class="card">
+        <h3>Power (W)</h3>
+        <p id="power">-</p>
+      </div>
+    </div>
+    <p id="time"></p>
+
+    <script>
+      async function update() {
+        const res = await fetch("/api/readings");
+        const readings = await res.json();
+        if (readings.length === 0) return;
+
+        const last = readings[readings.length - 1];
+
+        document.getElementById("lux").textContent = Math.round(last.lux);
+        document.getElementById("volt").textContent = last.volt.toFixed(2);
+        document.getElementById("amp").textContent = last.amp.toFixed(2);
+        document.getElementById("power").textContent = last.power.toFixed(2);
+        document.getElementById("time").textContent =
+          "Last update: " + new Date(last.time).toLocaleTimeString();
+      }
+
+      update();
+      setInterval(update, 3000);
+    </script>
+  </body>
+</html>
