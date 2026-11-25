@@ -4,14 +4,15 @@ const app = express();
 
 app.use(express.json());
 app.use(express.static("public"));
-
+   
 const readings = [];
 
 app.post("/api/readings", (req, res) => {
-  const { lux, volt, amp } = req.body;
+  const { time, lux, volt, amp, source} = req.body;
 
   readings.push({
-    time: new Date().toISOString(),
+    time,
+    source,
     lux,
     volt,
     amp,
