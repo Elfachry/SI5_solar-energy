@@ -1,0 +1,269 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Solar Monitor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <style>
+      body {
+        font-family: sans-serif;
+        max-width: 900px;
+        margin: 40px auto;
+        padding: 0 16px;
+      }
+      .header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .badge {
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 13px;
+        font-weight: bold;
+        background: #eee;
+        color: #555;
+      }
+      .badge.simulation {
+        background: #fff3cd;
+        color: #8a6d00;
+      }
+      .badge.hardware {
+        background: #d4edda;
+        color: #1e6b32;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-top: 16px;
+      }
+      .card {
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 16px;
+      }
+      .card h3 {
+        margin: 0;
+        font-size: 14px;
+        color: #666;
+      }
+      .card p {
+        margin: 8px 0 0;
+        font-size: 28px;
+        font-weight: bold;
+      }
+      .chart-box {
+        margin-top: 24px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>Solar Monitor</h1>
+      <a href="/">Roof estimator</a>
+      <span id="source" class="badge">no data</span>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <h3>Light (lux)</h3>
+        <p id="lux">-</p>
+      </div>
+      <div class="card">
+        <h3>Voltage (V)</h3>
+        <p id="volt">-</p>
+      </div>
+      <div class="card">
+        <h3>Current (A)</h3>
+        <p id="amp">-</p>
+      </div>
+      <div class="card">
+        <h3>Power (W)</h3>
+        <p id="power">-</p>
+      </div>
+    </div>
+    <p id="time"></p>
+
+    <div class="chart-box">
+      <h3>Energy and estimated savings</h3>
+      <label>
+        Tariff (Rp per kWh)
+        <input id="tariff" type="number" value="1500" min="0" />
+      </label>
+      <p>Energy produced: <b id="wh">-</b> Wh (<span id="kwh">-</span> kWh)</p>
+      <p>Estimated savings: <b id="savings">-</b></p>
+      <small
+        >Calculated from readings, assuming all energy offsets purchased
+        electricity.</small
+      >
+    </div>
+
+    <div class="chart-box"><canvas id="luxChart"></canvas></div>
+    <div class="chart-box"><canvas id="powerChart"></canvas></div>
+    <div class="chart-box">
+      <h3>Light vs power</h3>
+      <p>Correlation (r): <b id="corr">-</b></p>
+      <canvas id="scatterChart"></canvas>
+    </div>
+
+    <script>
+      function makeChart(canvasId, label, color) {
+        return new Chart(document.getElementById(canvasId), {
+          type: "line",
+          data: {
+            labels: [],
+            datasets: [
+              {
+                label,
+                data: [],
+                borderColor: color,
+                pointRadius: 0,
+                tension: 0.3,
+              },
+            ],
+          },
+          options: {
+            animation: false,
+            scales: { x: { ticks: { maxTicksLimit: 8 } } },
+          },
+        });
+      }
+
+      const luxChart = makeChart("luxChart", "Light (lux)", "#e6a700");
+      const powerChart = makeChart("powerChart", "Power (W)", "#2a7de1");
+
+      function setChart(chart, labels, values) {
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = values;
+        chart.update();
+      }
+
+      // Energy (Wh) = sum of average power between two readings x hours between them.
+      function calcEnergyWh(readings) {
+        let wh = 0;
+        for (let i = 1; i < readings.length; i++) {
+          const dtHours =
+            (new Date(readings[i].time) - new Date(readings[i - 1].time)) /
+            3600000;
+
+          // Skip gaps caused by a restart (time going backwards or jumping).
+          if (dtHours <= 0 || dtHours > 1) continue;
+
+          const avgPower = (readings[i].power + readings[i - 1].power) / 2;
+          wh += avgPower * dtHours;
+        }
+        return wh;
+      }
+
+      const scatterChart = new Chart(document.getElementById("scatterChart"), {
+        type: "scatter",
+        data: {
+          datasets: [
+            {
+              label: "Reading",
+              data: [],
+              pointRadius: 3,
+              backgroundColor: "#2a7de1",
+            },
+          ],
+        },
+        options: {
+          animation: false,
+          scales: {
+            x: { title: { display: true, text: "Light (lux)" } },
+            y: { title: { display: true, text: "Power (W)" } },
+          },
+        },
+      });
+
+      // Pearson correlation: -1 to 1, where 1 means a perfect upward line.
+      function correlation(xs, ys) {
+        const n = xs.length;
+        if (n < 2) return null;
+        const mx = xs.reduce((a, b) => a + b, 0) / n;
+        const my = ys.reduce((a, b) => a + b, 0) / n;
+        let num = 0,
+          dx = 0,
+          dy = 0;
+        for (let i = 0; i < n; i++) {
+          num += (xs[i] - mx) * (ys[i] - my);
+          dx += (xs[i] - mx) ** 2;
+          dy += (ys[i] - my) ** 2;
+        }
+        if (dx === 0 || dy === 0) return null; // no variation, correlation undefined
+        return num / Math.sqrt(dx * dy);
+      }
+
+      async function update() {
+        const res = await fetch("/api/readings");
+        const readings = await res.json();
+        if (readings.length === 0) return;
+
+        const last = readings[readings.length - 1];
+
+        // Cards
+        document.getElementById("lux").textContent = Math.round(last.lux);
+        document.getElementById("volt").textContent = last.volt.toFixed(2);
+        document.getElementById("amp").textContent = last.amp.toFixed(2);
+        document.getElementById("power").textContent = last.power.toFixed(2);
+        document.getElementById("time").textContent =
+          "Last update: " + new Date(last.time).toLocaleTimeString();
+
+        // Source badge
+        const badge = document.getElementById("source");
+        badge.textContent = last.source;
+        badge.className = "badge " + last.source;
+
+        // Charts
+        const labels = readings.map((r) =>
+          new Date(r.time).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        );
+        setChart(
+          luxChart,
+          labels,
+          readings.map((r) => r.lux),
+        );
+        setChart(
+          powerChart,
+          labels,
+          readings.map((r) => r.power),
+        );
+
+        // Energy and savings
+        const wh = calcEnergyWh(readings);
+        const kwh = wh / 1000;
+        const tariff = Number(document.getElementById("tariff").value) || 0;
+
+        document.getElementById("wh").textContent = wh.toFixed(2);
+        document.getElementById("kwh").textContent = kwh.toFixed(4);
+        document.getElementById("savings").textContent =
+          "Rp " + Math.round(kwh * tariff).toLocaleString("id-ID");
+
+        // Light vs power
+        scatterChart.data.datasets[0].data = readings.map((p) => ({
+          x: p.lux,
+          y: p.power,
+        }));
+        scatterChart.update();
+
+        const corr = correlation(
+          readings.map((p) => p.lux),
+          readings.map((p) => p.power),
+        );
+        document.getElementById("corr").textContent =
+          corr === null ? "n/a" : corr.toFixed(3);
+      }
+
+      update();
+      document.getElementById("tariff").addEventListener("input", update);
+      setInterval(update, 3000);
+    </script>
+  </body>
+</html>

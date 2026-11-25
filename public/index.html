@@ -1,268 +1,72 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Solar Monitor</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-    <style>
-      body {
-        font-family: sans-serif;
-        max-width: 900px;
-        margin: 40px auto;
-        padding: 0 16px;
-      }
-      .header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-      .badge {
-        padding: 4px 10px;
-        border-radius: 12px;
-        font-size: 13px;
-        font-weight: bold;
-        background: #eee;
-        color: #555;
-      }
-      .badge.simulation {
-        background: #fff3cd;
-        color: #8a6d00;
-      }
-      .badge.hardware {
-        background: #d4edda;
-        color: #1e6b32;
-      }
-      .cards {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 16px;
-        margin-top: 16px;
-      }
-      .card {
-        border: 1px solid #ccc;
-        border-radius: 8px;
-        padding: 16px;
-      }
-      .card h3 {
-        margin: 0;
-        font-size: 14px;
-        color: #666;
-      }
-      .card p {
-        margin: 8px 0 0;
-        font-size: 28px;
-        font-weight: bold;
-      }
-      .chart-box {
-        margin-top: 24px;
-        border: 1px solid #ccc;
-        border-radius: 8px;
-        padding: 16px;
-      }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Solar Roof Estimator</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <link rel="stylesheet" href="/css/estimator.css" />
   </head>
   <body>
-    <div class="header">
-      <h1>Solar Monitor</h1>
-      <span id="source" class="badge">no data</span>
-    </div>
+    <header class="topbar">
+      <a class="brand" href="/">SOLAR<span>ROOF</span></a>
+      <a class="simulation-link" href="/simulation">Live simulation →</a>
+    </header>
+    <main>
+      <section class="hero">
+        <div id="map" aria-label="Choose a location on the map"></div>
+        <div class="map-hint" id="mapHint">Click the map to choose a spot</div>
+        <button id="locate" class="locate" type="button">◎ Locate me</button>
+      </section>
 
-    <div class="cards">
-      <div class="card">
-        <h3>Light (lux)</h3>
-        <p id="lux">-</p>
-      </div>
-      <div class="card">
-        <h3>Voltage (V)</h3>
-        <p id="volt">-</p>
-      </div>
-      <div class="card">
-        <h3>Current (A)</h3>
-        <p id="amp">-</p>
-      </div>
-      <div class="card">
-        <h3>Power (W)</h3>
-        <p id="power">-</p>
-      </div>
-    </div>
-    <p id="time"></p>
+      <section class="panel setup-card" aria-labelledby="setup-title">
+        <p class="eyebrow">SOLAR POTENTIAL</p>
+        <h1 id="setup-title">Estimate your roof's output</h1>
+        <p class="intro">Choose a location and enter the package you are considering.</p>
+        <form id="estimateForm" novalidate>
+          <label>Location
+            <output id="locationValue" class="location-value">Click the map to choose a spot</output>
+          </label>
+          <label for="systemWp">System size (Wp)
+            <input id="systemWp" inputmode="decimal" placeholder="1,000" autocomplete="off" />
+            <small id="sizeHelper" class="helper" hidden></small>
+            <small class="field-help">Total panel capacity of your package (kWp × 1,000)</small>
+          </label>
+          <label for="price">Electricity price per kWh
+            <span class="money-input"><select id="currency" aria-label="Currency"><option>Rp</option><option>$</option><option>€</option><option>RM</option><option>S$</option></select><input id="price" inputmode="decimal" value="1,444.70" /></span>
+          </label>
+          <label for="cost">System cost <span class="muted">(optional)</span>
+            <input id="cost" inputmode="decimal" placeholder="e.g. 33,600,000" />
+            <small class="field-help">Total installed price of your package</small>
+          </label>
+          <p id="validation" class="validation" role="alert"></p>
+          <button id="estimate" class="primary" type="submit" disabled>Estimate my solar output <span>→</span></button>
+        </form>
+      </section>
 
-    <div class="chart-box">
-      <h3>Energy and estimated savings</h3>
-      <label>
-        Tariff (Rp per kWh)
-        <input id="tariff" type="number" value="1500" min="0" />
-      </label>
-      <p>Energy produced: <b id="wh">-</b> Wh (<span id="kwh">-</span> kWh)</p>
-      <p>Estimated savings: <b id="savings">-</b></p>
-      <small
-        >Calculated from readings, assuming all energy offsets purchased
-        electricity.</small
-      >
-    </div>
+      <section id="results" class="panel results-card" hidden aria-labelledby="results-title">
+        <div id="loading" class="skeleton" hidden><div></div><div></div><div></div></div>
+        <div id="errorState" class="error-state" hidden><h2>Couldn't load sunshine data for this spot.</h2><button id="retry" class="secondary" type="button">Try again</button></div>
+        <div id="resultContent" hidden>
+          <div class="result-heading"><div><p class="eyebrow">YOUR ESTIMATE</p><h2 id="results-title">A bright outlook</h2></div><span class="sun-mark">☼</span></div>
+          <div class="tiles">
+            <article class="tile"><span>Yearly energy</span><strong id="yearly"></strong><small id="daily"></small></article>
+            <article class="tile"><span>Yearly savings</span><strong id="savingsCompact"></strong><small id="savingsFull"></small></article>
+            <article class="tile"><span>Payback period</span><strong id="payback"></strong><small id="paybackSub"></small><em id="packageNote" hidden>Savings count electricity offset only. Extras in your package (e.g. battery backup) are not valued.</em></article>
+          </div>
+          <article class="co2-tile"><strong id="co2"></strong><span id="trees"></span></article>
+          <p id="range" class="range"></p>
+          <div class="chart-heading"><div><h3>Monthly production</h3><p id="chartLabel" class="chart-alt"></p></div><span id="chartTotal" class="chip"></span></div>
+          <div id="chart" class="bar-chart" tabindex="0" role="img"></div>
+          <p class="source-line">Solar data: NASA POWER (long-term monthly average at this location)</p>
+          <button id="howCalculated" class="text-button" type="button">How is this calculated? <span>→</span></button>
+          <p class="disclaimer"><i>Ideal estimate for a perfectly flat panel with no shade. Real output will usually be lower.</i></p>
+        </div>
+      </section>
+    </main>
 
-    <div class="chart-box"><canvas id="luxChart"></canvas></div>
-    <div class="chart-box"><canvas id="powerChart"></canvas></div>
-    <div class="chart-box">
-      <h3>Light vs power</h3>
-      <p>Correlation (r): <b id="corr">-</b></p>
-      <canvas id="scatterChart"></canvas>
-    </div>
-
-    <script>
-      function makeChart(canvasId, label, color) {
-        return new Chart(document.getElementById(canvasId), {
-          type: "line",
-          data: {
-            labels: [],
-            datasets: [
-              {
-                label,
-                data: [],
-                borderColor: color,
-                pointRadius: 0,
-                tension: 0.3,
-              },
-            ],
-          },
-          options: {
-            animation: false,
-            scales: { x: { ticks: { maxTicksLimit: 8 } } },
-          },
-        });
-      }
-
-      const luxChart = makeChart("luxChart", "Light (lux)", "#e6a700");
-      const powerChart = makeChart("powerChart", "Power (W)", "#2a7de1");
-
-      function setChart(chart, labels, values) {
-        chart.data.labels = labels;
-        chart.data.datasets[0].data = values;
-        chart.update();
-      }
-
-      // Energy (Wh) = sum of average power between two readings x hours between them.
-      function calcEnergyWh(readings) {
-        let wh = 0;
-        for (let i = 1; i < readings.length; i++) {
-          const dtHours =
-            (new Date(readings[i].time) - new Date(readings[i - 1].time)) /
-            3600000;
-
-          // Skip gaps caused by a restart (time going backwards or jumping).
-          if (dtHours <= 0 || dtHours > 1) continue;
-
-          const avgPower = (readings[i].power + readings[i - 1].power) / 2;
-          wh += avgPower * dtHours;
-        }
-        return wh;
-      }
-
-      const scatterChart = new Chart(document.getElementById("scatterChart"), {
-        type: "scatter",
-        data: {
-          datasets: [
-            {
-              label: "Reading",
-              data: [],
-              pointRadius: 3,
-              backgroundColor: "#2a7de1",
-            },
-          ],
-        },
-        options: {
-          animation: false,
-          scales: {
-            x: { title: { display: true, text: "Light (lux)" } },
-            y: { title: { display: true, text: "Power (W)" } },
-          },
-        },
-      });
-
-      // Pearson correlation: -1 to 1, where 1 means a perfect upward line.
-      function correlation(xs, ys) {
-        const n = xs.length;
-        if (n < 2) return null;
-        const mx = xs.reduce((a, b) => a + b, 0) / n;
-        const my = ys.reduce((a, b) => a + b, 0) / n;
-        let num = 0,
-          dx = 0,
-          dy = 0;
-        for (let i = 0; i < n; i++) {
-          num += (xs[i] - mx) * (ys[i] - my);
-          dx += (xs[i] - mx) ** 2;
-          dy += (ys[i] - my) ** 2;
-        }
-        if (dx === 0 || dy === 0) return null; // no variation, correlation undefined
-        return num / Math.sqrt(dx * dy);
-      }
-
-      async function update() {
-        const res = await fetch("/api/readings");
-        const readings = await res.json();
-        if (readings.length === 0) return;
-
-        const last = readings[readings.length - 1];
-
-        // Cards
-        document.getElementById("lux").textContent = Math.round(last.lux);
-        document.getElementById("volt").textContent = last.volt.toFixed(2);
-        document.getElementById("amp").textContent = last.amp.toFixed(2);
-        document.getElementById("power").textContent = last.power.toFixed(2);
-        document.getElementById("time").textContent =
-          "Last update: " + new Date(last.time).toLocaleTimeString();
-
-        // Source badge
-        const badge = document.getElementById("source");
-        badge.textContent = last.source;
-        badge.className = "badge " + last.source;
-
-        // Charts
-        const labels = readings.map((r) =>
-          new Date(r.time).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-        );
-        setChart(
-          luxChart,
-          labels,
-          readings.map((r) => r.lux),
-        );
-        setChart(
-          powerChart,
-          labels,
-          readings.map((r) => r.power),
-        );
-
-        // Energy and savings
-        const wh = calcEnergyWh(readings);
-        const kwh = wh / 1000;
-        const tariff = Number(document.getElementById("tariff").value) || 0;
-
-        document.getElementById("wh").textContent = wh.toFixed(2);
-        document.getElementById("kwh").textContent = kwh.toFixed(4);
-        document.getElementById("savings").textContent =
-          "Rp " + Math.round(kwh * tariff).toLocaleString("id-ID");
-
-        // Light vs power
-        scatterChart.data.datasets[0].data = readings.map((p) => ({
-          x: p.lux,
-          y: p.power,
-        }));
-        scatterChart.update();
-
-        const corr = correlation(
-          readings.map((p) => p.lux),
-          readings.map((p) => p.power),
-        );
-        document.getElementById("corr").textContent =
-          corr === null ? "n/a" : corr.toFixed(3);
-      }
-
-      update();
-      document.getElementById("tariff").addEventListener("input", update);
-      setInterval(update, 3000);
-    </script>
+    <dialog id="explainModal" aria-labelledby="modalTitle"><div class="modal-inner"><button id="closeModal" class="close" type="button" aria-label="Close">×</button><p class="eyebrow">THE SHORT VERSION</p><h2 id="modalTitle">How we calculate this</h2><div id="modalBody"></div><p class="disclaimer">This is an ideal estimate. Real output will usually be lower. Savings only count electricity you no longer buy. Battery backup and other package extras aren't valued here.</p></div></dialog>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script type="module" src="/js/estimator.js"></script>
   </body>
 </html>
