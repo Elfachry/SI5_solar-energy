@@ -7,14 +7,16 @@ const readings = [];
 const solarCache = new Map();
 const MAX_CACHE_ENTRIES = 500;
 
-app.get("/", (req, res) => res.sendFile("index.html", { root: "public" }));
-app.get("/simulation", (req, res) =>
-  res.sendFile("simulation/index.html", { root: "public" }),
-);
-app.get("/simulation/", (req, res) =>
-  res.sendFile("simulation/index.html", { root: "public" }),
-);
-app.use(express.static("public"));
+if (!process.env.VERCEL) {
+  app.get("/", (req, res) => res.sendFile("index.html", { root: "public" }));
+  app.get("/simulation", (req, res) =>
+    res.sendFile("simulation/index.html", { root: "public" }),
+  );
+  app.get("/simulation/", (req, res) =>
+    res.sendFile("simulation/index.html", { root: "public" }),
+  );
+  app.use(express.static("public"));
+}
 
 const SOURCES = new Set(["sensor", "simulation"]);
 
