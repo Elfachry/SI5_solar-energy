@@ -16,23 +16,35 @@ app.get("/simulation/", (req, res) =>
 );
 app.use(express.static("public"));
 
+const SOURCES = new Set(["sensor", "simulation"]);
+
 app.post("/api/readings", (req, res) => {
-  const { time, lux, volt, amp, source } = req.body;
+  if (req.get("x-api-key") !== process.env.INGEST_KEY)
+    return res.status(401).json({ error: "unauthorized" });
+
+  const { time, lux, volt, amp, source } = req.body ?? {};
+  const nums = [lux, volt, amp].map(Number);
+  if (
+    !SOURCES.has(source) ||
+    Number.isNaN(Date.parse(time)) ||
+    nums.some((n) => !Number.isFinite(n) || n < 0)
+  )
+    return res.status(400).json({ error: "invalid reading" });
 
   readings.push({
     time,
     source,
-    lux,
-    volt,
-    amp,
-    power: volt * amp,
+    lux: nums[0],
+    volt: nums[1],
+    amp: nums[2],
+    power: nums[1] * nums[2],
   });
-
+  if (readings.length > 5000) readings.shift();
   res.json({ ok: true });
 });
 
 app.get("/api/readings", (req, res) => {
-  res.json(readings);
+  res.json(readings.slice(-500));
 });
 
 function parseCoordinate(value, name, min, max) {
@@ -111,6 +123,10 @@ app.get("/api/solar", async (req, res) => {
     solarCache.set(key, result);
     if (solarCache.size > MAX_CACHE_ENTRIES)
       solarCache.delete(solarCache.keys().next().value);
+    res.set(
+      "Cache-Control",
+      "public, s-maxage=86400, stale-while-revalidate=604800",
+    );
     return res.json(result);
   } catch (error) {
     return res
@@ -124,3 +140,4 @@ if (process.env.NODE_ENV !== "test") {
 }
 
 export { app };
+export default app;
