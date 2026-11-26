@@ -1,8 +1,12 @@
 export const PERFORMANCE_RATIO = 0.77;
-export const UNCERTAINTY = 0.10;
+export const UNCERTAINTY = 0.1;
 export const CO2_KG_PER_KWH = 0.87;
 export const CO2_KG_PER_TREE_YEAR = 21;
-export const DEFAULT_PRICE = 1444.70;
+export const DEFAULT_PRICE = 1444.7;
 export const DEFAULT_CURRENCY = "Rp";
 export const MIN_SYSTEM_WP = 1;
 export const MAX_SYSTEM_WP = 100000;
+export const DEFAULT_PANEL_WP = 550;
+export const DEFAULT_PANEL_COUNT = 8;
+export const MAX_PANEL_WP = 2000;
+export const MAX_PANELS = 60;

@@ -1,0 +1,1060 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <title>Solar Roof Estimator</title>
+    <style>
+      :root {
+        --ink: #17221d;
+        --muted: #69756e;
+        --line: #dce5df;
+        --paper: #fff;
+        --canvas: #eef2ef;
+        --green: #19845b;
+        --green-dark: #116544;
+        --green-soft: #e7f3ec;
+        --green-pale: #f3f8f4;
+        --gray: #f5f7f5;
+        --radius: 10px;
+        font-family:
+          "Inter",
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      body {
+        color: var(--ink);
+        background: var(--canvas);
+        font-size: 14px;
+      }
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible {
+        outline: 2px solid #70b995;
+        outline-offset: 2px;
+      }
+      .map {
+        position: fixed;
+        inset: 0;
+        background-color: #e9efeb;
+        overflow: hidden;
+        cursor: crosshair;
+      }
+      .map:before {
+        content: "";
+        position: absolute;
+        inset: -10%;
+        background:
+          linear-gradient(
+            27deg,
+            transparent 46%,
+            #fff 46.3% 47.2%,
+            transparent 47.5%
+          ),
+          linear-gradient(
+            116deg,
+            transparent 22%,
+            #fff 22.3% 23.1%,
+            transparent 23.4% 74%,
+            #fff 74.3% 75%,
+            transparent 75.3%
+          ),
+          linear-gradient(
+            0deg,
+            transparent 0 97%,
+            rgba(119, 145, 128, 0.12) 97% 98%,
+            transparent 98%
+          ),
+          linear-gradient(
+            90deg,
+            transparent 0 97%,
+            rgba(119, 145, 128, 0.12) 97% 98%,
+            transparent 98%
+          );
+        background-size:
+          auto,
+          auto,
+          230px 230px,
+          230px 230px;
+        opacity: 0.95;
+        transform: scale(var(--zoom, 1));
+        transition: transform 0.2s;
+      }
+      .map:after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(
+            ellipse at 75% 22%,
+            rgba(189, 218, 197, 0.6),
+            transparent 32%
+          ),
+          radial-gradient(
+            ellipse at 26% 82%,
+            rgba(204, 224, 208, 0.55),
+            transparent 30%
+          );
+        pointer-events: none;
+      }
+      .map-hint {
+        position: absolute;
+        z-index: 1;
+        left: 50%;
+        top: 48%;
+        transform: translate(-50%, -50%);
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 11px 15px;
+        border: 1px solid #d6e2d9;
+        border-radius: 8px;
+        background: #ffffffed;
+        color: #42564a;
+        font-size: 12px;
+        font-weight: 650;
+        white-space: nowrap;
+      }
+      .map-hint svg {
+        color: var(--green);
+      }
+      .pin {
+        position: absolute;
+        z-index: 3;
+        transform: translate(-50%, -100%);
+        color: var(--green);
+        pointer-events: none;
+      }
+      .pin svg {
+        width: 36px;
+        height: 36px;
+        fill: #d9eee1;
+        stroke: var(--green);
+        stroke-width: 1.7;
+      }
+      .pin:after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: -7px;
+        width: 24px;
+        height: 7px;
+        transform: translateX(-50%);
+        border-radius: 50%;
+        background: #9bb4a2;
+      }
+      .panel {
+        position: absolute;
+        z-index: 5;
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        overflow: hidden;
+      }
+      .setup {
+        left: 18px;
+        top: 18px;
+        width: 300px;
+        max-height: calc(100dvh - 36px);
+      }
+      .results {
+        right: 18px;
+        top: 18px;
+        width: 390px;
+        max-height: calc(100dvh - 36px);
+      }
+      .panel-head {
+        padding: 17px 17px 12px;
+        border-bottom: 1px solid #edf1ee;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+      h1,
+      h2 {
+        font-size: 15px;
+        letter-spacing: -0.25px;
+        font-weight: 750;
+      }
+      .panel-body {
+        padding: 14px 17px 17px;
+        overflow: auto;
+        max-height: calc(100dvh - 100px);
+      }
+      .label {
+        display: block;
+        margin: 12px 0 6px;
+        font-size: 11px;
+        font-weight: 700;
+        color: #425148;
+      }
+      .location {
+        min-height: 58px;
+        border: 1px dashed #b9cabe;
+        border-radius: 7px;
+        background: var(--green-pale);
+        padding: 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .location.active {
+        border-style: solid;
+        border-color: #8bb69b;
+      }
+      .location-icon {
+        width: 30px;
+        height: 30px;
+        border-radius: 7px;
+        background: #dceee2;
+        color: var(--green);
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .location strong {
+        display: block;
+        font-size: 12px;
+        font-weight: 650;
+      }
+      .location small {
+        display: block;
+        color: var(--muted);
+        font-size: 10px;
+        margin-top: 3px;
+      }
+      .control {
+        height: 39px;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 0 10px;
+        border: 1px solid #d5dfd8;
+        border-radius: 7px;
+        background: white;
+        transition: border-color 0.15s;
+      }
+      .control:focus-within {
+        border-color: #65a782;
+      }
+      .control input {
+        width: 100%;
+        min-width: 0;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: var(--ink);
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .control .unit {
+        font-size: 11px;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .stepper {
+        height: 39px;
+        border: 1px solid #d5dfd8;
+        border-radius: 7px;
+        display: flex;
+        overflow: hidden;
+      }
+      .stepper button {
+        width: 42px;
+        border: 0;
+        background: #f7faf7;
+        color: #405248;
+        font-size: 18px;
+      }
+      .stepper button:hover {
+        background: var(--green-soft);
+        color: var(--green-dark);
+      }
+      .stepper input {
+        width: 100%;
+        min-width: 0;
+        text-align: center;
+        border: 0;
+        outline: 0;
+        font-weight: 700;
+        color: var(--ink);
+        background: #fff;
+      }
+      .primary {
+        margin-top: 15px;
+        width: 100%;
+        height: 41px;
+        border: 1px solid var(--green-dark);
+        border-radius: 7px;
+        background: var(--green);
+        color: white;
+        font-weight: 700;
+        font-size: 13px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+      }
+      .primary:hover:not(:disabled) {
+        background: var(--green-dark);
+      }
+      .primary:disabled {
+        background: #dce5df;
+        border-color: #dce5df;
+        color: #87948b;
+        cursor: not-allowed;
+      }
+      .close {
+        width: 30px;
+        height: 30px;
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 6px;
+        color: #647168;
+        font-size: 18px;
+      }
+      .tiles {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 4px;
+      }
+      .tile {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 11px 9px 10px;
+        background: #fff;
+        min-width: 0;
+      }
+      .tile:nth-child(2) {
+        background: #f7faf7;
+      }
+      .tile:nth-child(3) {
+        background: #f0f6f1;
+      }
+      .tile-mark {
+        height: 25px;
+        width: 25px;
+        border-radius: 6px;
+        background: #e5f1e8;
+        color: var(--green);
+        display: grid;
+        place-items: center;
+        margin-bottom: 10px;
+      }
+      .tile-mark svg,
+      .co2-icon svg,
+      #locate svg {
+        display: block;
+      }
+      .tile-label {
+        font-size: 10px;
+        color: var(--muted);
+        font-weight: 650;
+        display: block;
+      }
+      .tile-value {
+        display: block;
+        margin-top: 5px;
+        font-size: clamp(15px, 1.5vw, 19px);
+        font-weight: 780;
+        letter-spacing: -0.5px;
+        white-space: nowrap;
+      }
+      .tile-value em {
+        font-size: 10px;
+        color: var(--muted);
+        font-style: normal;
+        font-weight: 600;
+      }
+      .tile-note {
+        display: block;
+        margin-top: 5px;
+        font-size: 9px;
+        color: #78847c;
+      }
+      .co2 {
+        margin-top: 9px;
+        padding: 12px;
+        border: 1px solid #cce2d2;
+        border-radius: 8px;
+        background: var(--green-soft);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .co2-icon {
+        height: 30px;
+        width: 30px;
+        flex: none;
+        border-radius: 7px;
+        background: #d2e9d9;
+        color: var(--green-dark);
+        display: grid;
+        place-items: center;
+      }
+      .co2 strong {
+        display: block;
+        color: #175c3e;
+        font-size: 17px;
+        letter-spacing: -0.3px;
+      }
+      .co2 span {
+        font-size: 10px;
+        color: #47735a;
+      }
+      .co2 .trees {
+        margin-left: auto;
+        max-width: 95px;
+        text-align: right;
+        line-height: 1.4;
+      }
+      .chart-head {
+        margin: 16px 0 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .chart-head h3 {
+        font-size: 12px;
+        font-weight: 750;
+      }
+      .pill {
+        padding: 5px 7px;
+        border: 1px solid #d6e4d9;
+        border-radius: 5px;
+        background: #f1f7f2;
+        color: #3f7654;
+        font-size: 10px;
+        font-weight: 700;
+      }
+      .chart {
+        height: 166px;
+        padding: 12px 9px 0;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background-color: #fbfcfb;
+        background-image: repeating-linear-gradient(
+          to top,
+          transparent 0,
+          transparent 36px,
+          #e9efea 37px,
+          transparent 38px
+        );
+        display: flex;
+        gap: 6px;
+      }
+      .bar {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        position: relative;
+      }
+      .bar i {
+        display: block;
+        height: calc((100% - 19px) * var(--p));
+        min-height: 4px;
+        border-radius: 3px 3px 1px 1px;
+        background: #a5cbb0;
+      }
+      .bar:nth-child(3n) i {
+        background: #80b693;
+      }
+      .bar:nth-child(8) i {
+        background: var(--green);
+      }
+      .bar small {
+        font-size: 9px;
+        color: #718078;
+        text-align: center;
+        margin-top: 7px;
+      }
+      .bar:before {
+        content: attr(data-value);
+        position: absolute;
+        bottom: calc((100% - 19px) * var(--p) + 23px);
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 9px;
+        padding: 4px 5px;
+        background: #244f38;
+        color: white;
+        border-radius: 4px;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .bar:hover:before {
+        opacity: 1;
+      }
+      .text-link {
+        margin: 10px 0 0;
+        padding: 5px 0;
+        border: 0;
+        background: none;
+        color: var(--green-dark);
+        font-size: 11px;
+        font-weight: 700;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        background: #15231c66;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+      }
+      .modal {
+        width: min(440px, 100%);
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 20px;
+      }
+      .modal h2 {
+        font-size: 16px;
+      }
+      .modal p {
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.55;
+        margin-top: 6px;
+      }
+      .modal-row {
+        display: flex;
+        gap: 11px;
+        margin-top: 16px;
+      }
+      .modal-row b {
+        font-size: 12px;
+      }
+      .modal-row p {
+        margin-top: 3px;
+      }
+      .map-controls {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        z-index: 4;
+        display: grid;
+        gap: 8px;
+      }
+      .zoom {
+        display: grid;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        overflow: hidden;
+        background: #fff;
+      }
+      .map-controls button {
+        height: 38px;
+        width: 38px;
+        border: 0;
+        background: white;
+        color: #415348;
+        font-size: 17px;
+      }
+      .zoom button + button {
+        border-top: 1px solid var(--line);
+      }
+      .map-controls button:hover {
+        background: var(--green-soft);
+        color: var(--green-dark);
+      }
+      .attribution {
+        position: fixed;
+        left: 12px;
+        bottom: 9px;
+        z-index: 2;
+        padding: 4px 7px;
+        background: #ffffffc9;
+        border-radius: 4px;
+        color: #718078;
+        font-size: 9px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      @media (max-width: 850px) {
+        html,
+        body {
+          overflow: auto;
+          min-height: 100%;
+          height: auto;
+        }
+        .map {
+          position: fixed;
+          height: 100dvh;
+        }
+        .setup,
+        .results {
+          position: fixed;
+          left: 9px;
+          right: 9px;
+          top: auto;
+          bottom: 0;
+          width: auto;
+          max-height: min(78dvh, 660px);
+          border-radius: 12px 12px 0 0;
+        }
+        .setup {
+          z-index: 5;
+        }
+        .results {
+          z-index: 6;
+          bottom: 0;
+        }
+        .panel-head {
+          padding: 14px 16px 10px;
+        }
+        .panel-body {
+          max-height: calc(78dvh - 58px);
+          padding: 12px 16px 18px;
+        }
+        .map-controls {
+          top: 14px;
+          right: 12px;
+          bottom: auto;
+        }
+        .attribution {
+          display: none;
+        }
+        .tiles {
+          gap: 6px;
+        }
+        .tile {
+          padding: 9px 7px;
+        }
+        .tile-value {
+          font-size: 16px;
+        }
+      }
+      @media (max-width: 370px) {
+        .tile-value {
+          font-size: 14px;
+        }
+        .chart {
+          gap: 3px;
+          padding-inline: 6px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main
+      class="map"
+      id="map"
+      role="button"
+      tabindex="0"
+      aria-label="Choose a location on the map"
+    >
+      <div class="map-hint" id="mapHint">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+        >
+          <path d="M3 6 9 3l6 3 6-3v15l-6 3-6-3-6 3z" />
+          <path d="M9 3v15m6-12v15" />
+        </svg>
+        Select a roof location
+      </div>
+      <div class="pin" id="pin" hidden>
+        <svg viewBox="0 0 24 24">
+          <path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z" />
+          <circle cx="12" cy="10" r="3" fill="white" />
+        </svg>
+      </div>
+    </main>
+
+    <section class="panel setup" id="setup">
+      <header class="panel-head"><h1>Solar estimate</h1></header>
+      <div class="panel-body">
+        <span class="label">Location</span>
+        <div class="location" id="location">
+          <span class="location-icon"
+            ><svg
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            >
+              <path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z" />
+              <circle cx="12" cy="10" r="3" /></svg
+          ></span>
+          <div>
+            <strong id="locationText">Choose a point on the map</strong
+            ><small id="coordinates">No location selected</small>
+          </div>
+        </div>
+        <label class="label" for="watts">Panel output</label>
+        <div class="control">
+          <input id="watts" type="number" min="1" max="2000" value="550" /><span
+            class="unit"
+            >Wp</span
+          >
+        </div>
+        <label class="label" for="count">Number of panels</label>
+        <div class="stepper">
+          <button id="minus" aria-label="Decrease panel count">−</button
+          ><input id="count" type="number" min="1" max="60" value="8" /><button
+            id="plus"
+            aria-label="Increase panel count"
+          >
+            +
+          </button>
+        </div>
+        <label class="label" for="rate">Electricity price</label>
+        <div class="control">
+          <span class="unit">Rp</span
+          ><input id="rate" type="number" min="0" value="1444.7" /><span
+            class="unit"
+            >/ kWh</span
+          >
+        </div>
+        <label class="label" for="cost"
+          >System cost
+          <span style="font-weight: 500; color: #87938b"
+            >(optional)</span
+          ></label
+        >
+        <div class="control">
+          <span class="unit">Rp</span
+          ><input id="cost" type="number" min="0" value="42500000" />
+        </div>
+        <button class="primary" id="estimate" disabled>
+          ↗ &nbsp; Calculate estimate
+        </button>
+      </div>
+    </section>
+
+    <section class="panel results" id="results" hidden>
+      <header class="panel-head">
+        <h2>Estimated performance</h2>
+        <button class="close" id="close" aria-label="Close results">×</button>
+      </header>
+      <div class="panel-body">
+        <div class="tiles">
+          <article class="tile">
+            <span class="tile-mark">ϟ</span
+            ><span class="tile-label">Yearly energy</span
+            ><strong class="tile-value" id="energy">4,717 <em>kWh</em></strong
+            ><span class="tile-note" id="daily">12.9 kWh per day</span>
+          </article>
+          <article class="tile">
+            <span class="tile-mark">↗</span
+            ><span class="tile-label">Yearly savings</span
+            ><strong class="tile-value" id="savings">Rp 6.81M</strong
+            ><span class="tile-note" id="savingsNote"
+              >Estimated value per year</span
+            >
+          </article>
+          <article class="tile">
+            <span class="tile-mark">◷</span
+            ><span class="tile-label">Payback period</span
+            ><strong class="tile-value" id="payback">6.2 <em>yrs</em></strong
+            ><span class="tile-note">Based on system cost</span>
+          </article>
+        </div>
+        <div class="co2">
+          <span class="co2-icon">♧</span>
+          <div>
+            <strong id="carbon">4,104 kg CO₂</strong
+            ><span>avoided per year</span>
+          </div>
+          <span class="trees">Similar to planting 195 trees</span>
+        </div>
+        <div class="chart-head">
+          <h3>Monthly production</h3>
+          <span class="pill" id="annual">4,717 kWh / yr</span>
+        </div>
+        <div
+          class="chart"
+          id="chart"
+          aria-label="Monthly solar production"
+        ></div>
+        <button class="text-link" id="how">How is this calculated?</button>
+      </div>
+    </section>
+
+    <div class="map-controls">
+      <div class="zoom">
+        <button id="zoomIn" aria-label="Zoom in">+</button
+        ><button id="zoomOut" aria-label="Zoom out">−</button>
+      </div>
+      <button id="locate" aria-label="Choose map center">◎</button>
+    </div>
+    <div class="attribution">Map illustration · Demo</div>
+
+    <div class="modal-backdrop" id="modal" hidden>
+      <section
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modalTitle"
+      >
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          "
+        >
+          <h2 id="modalTitle">Estimate methodology</h2>
+          <button class="close" id="dismiss" aria-label="Close">×</button>
+        </div>
+        <div class="modal-row">
+          <span class="location-icon">☼</span>
+          <div>
+            <b>Solar resource</b>
+            <p>
+              Production is approximated using a location-based daily solar
+              yield assumption and a system performance factor.
+            </p>
+          </div>
+        </div>
+        <div class="modal-row">
+          <span class="location-icon">▦</span>
+          <div>
+            <b>System capacity</b>
+            <p>
+              Panel output in watts peak is multiplied by the number of
+              installed panels.
+            </p>
+          </div>
+        </div>
+        <div class="modal-row">
+          <span class="location-icon">↗</span>
+          <div>
+            <b>Savings and payback</b>
+            <p>
+              Annual energy is multiplied by the electricity rate. Payback is
+              system cost divided by estimated annual savings.
+            </p>
+          </div>
+        </div>
+        <p
+          style="
+            margin-top: 15px;
+            padding: 10px;
+            background: var(--green-pale);
+            border: 1px solid var(--line);
+            border-radius: 7px;
+          "
+        >
+          This is an illustrative estimate, not a site survey or a guaranteed
+          energy forecast. Actual output depends on shading, roof direction,
+          tilt, weather and system losses.
+        </p>
+      </section>
+    </div>
+
+    <script>
+      (() => {
+        const $ = (id) => document.getElementById(id);
+        const icons = {
+          bolt: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" /></svg>',
+          savings: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 17 17 7M8 7h9v9" /></svg>',
+          clock: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3 2" /></svg>',
+          tree: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20V9m0 4c-3.5 0-5.5-1.8-5.5-5 3.5 0 5.5 1.8 5.5 5Zm0-2c3.5 0 5.5-1.8 5.5-5-3.5 0-5.5 1.8-5.5 5Z" /><path d="M8 20h8" /></svg>',
+          target: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3" /><path d="M12 2v4m0 12v4M2 12h4m12 0h4" /></svg>',
+        };
+        document.querySelectorAll(".tile-mark").forEach((el, i) => (el.innerHTML = [icons.bolt, icons.savings, icons.clock][i]));
+        document.querySelector(".co2-icon").innerHTML = icons.tree;
+        document.querySelector("#locate").innerHTML = icons.target;
+        const map = $("map"),
+          pin = $("pin");
+        let selected = false,
+          zoom = 1;
+        const months = [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec",
+        ];
+        const seasonal = [
+          0.68, 0.67, 0.8, 0.85, 0.9, 0.94, 0.97, 1, 0.96, 0.87, 0.76, 0.67,
+        ];
+        function choose(x, y) {
+          const rect = map.getBoundingClientRect();
+          const px = Math.max(12, Math.min(rect.width - 12, x - rect.left));
+          const py = Math.max(12, Math.min(rect.height - 12, y - rect.top));
+          pin.style.left = px + "px";
+          pin.style.top = py + "px";
+          pin.hidden = false;
+          const lat = (-6.4 + (1 - py / rect.height) * 0.3).toFixed(5);
+          const lon = (106.65 + (px / rect.width) * 0.3).toFixed(5);
+          $("locationText").textContent = "Location selected";
+          $("coordinates").textContent = lat + ", " + lon;
+          $("location").classList.add("active");
+          $("mapHint").hidden = true;
+          $("estimate").disabled = false;
+          selected = true;
+        }
+        map.addEventListener("click", (e) => choose(e.clientX, e.clientY));
+        map.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            const r = map.getBoundingClientRect();
+            choose(r.left + r.width * 0.5, r.top + r.height * 0.48);
+          }
+        });
+        $("locate").addEventListener("click", () => {
+          const r = map.getBoundingClientRect();
+          choose(r.left + r.width * 0.5, r.top + r.height * 0.5);
+        });
+        $("zoomIn").addEventListener("click", () => {
+          zoom = Math.min(1.7, zoom + 0.15);
+          map.style.setProperty("--zoom", zoom);
+        });
+        $("zoomOut").addEventListener("click", () => {
+          zoom = Math.max(0.7, zoom - 0.15);
+          map.style.setProperty("--zoom", zoom);
+        });
+        $("minus").addEventListener(
+          "click",
+          () =>
+            ($("count").value = Math.max(
+              1,
+              (Number($("count").value) || 1) - 1,
+            )),
+        );
+        $("plus").addEventListener(
+          "click",
+          () =>
+            ($("count").value = Math.min(
+              60,
+              (Number($("count").value) || 1) + 1,
+            )),
+        );
+        $("count").addEventListener(
+          "change",
+          () =>
+            ($("count").value = Math.min(
+              60,
+              Math.max(1, Number($("count").value) || 1),
+            )),
+        );
+        function rupiah(n) {
+          return "Rp " + Math.round(n).toLocaleString("id-ID");
+        }
+        function calculate() {
+          const wp = Math.max(
+            1,
+            Math.min(2000, Number($("watts").value) || 550),
+          );
+          const count = Math.max(
+            1,
+            Math.min(60, Number($("count").value) || 1),
+          );
+          const rate = Math.max(0, Number($("rate").value) || 0),
+            cost = Math.max(0, Number($("cost").value) || 0);
+          const capacity = (wp * count) / 1000;
+          const yearly = capacity * 4.35 * 365 * 0.78;
+          const savings = yearly * rate;
+          const payback = savings > 0 && cost > 0 ? cost / savings : 0;
+          $("energy").innerHTML =
+            Math.round(yearly).toLocaleString("en-US") + " <em>kWh</em>";
+          $("daily").textContent = (yearly / 365).toFixed(1) + " kWh per day";
+          $("savings").textContent =
+            savings >= 1e6
+              ? "Rp " + (savings / 1e6).toFixed(2) + "M"
+              : rupiah(savings);
+          $("savingsNote").textContent = rupiah(savings) + " per year";
+          $("payback").innerHTML = payback
+            ? payback.toFixed(1) + " <em>yrs</em>"
+            : "—";
+          $("carbon").textContent =
+            Math.round(yearly * 0.87).toLocaleString("en-US") + " kg CO₂";
+          $("annual").textContent =
+            Math.round(yearly).toLocaleString("en-US") + " kWh / yr";
+          $("chart").innerHTML = "";
+          const values = seasonal.map(
+            (v) => (yearly * v) / seasonal.reduce((a, b) => a + b, 0),
+          );
+          values.forEach((v, i) => {
+            const bar = document.createElement("div");
+            bar.className = "bar";
+            bar.style.setProperty("--p", String(v / Math.max(...values)));
+            bar.dataset.value = Math.round(v) + " kWh";
+            const fill = document.createElement("i"),
+              label = document.createElement("small");
+            label.textContent = months[i];
+            bar.append(fill, label);
+            $("chart").append(bar);
+          });
+          $("results").hidden = false;
+        }
+        $("estimate").addEventListener("click", () => {
+          if (selected) calculate();
+        });
+        $("close").addEventListener(
+          "click",
+          () => ($("results").hidden = true),
+        );
+        $("how").addEventListener("click", () => ($("modal").hidden = false));
+        $("dismiss").addEventListener(
+          "click",
+          () => ($("modal").hidden = true),
+        );
+        $("modal").addEventListener("click", (e) => {
+          if (e.target === $("modal")) $("modal").hidden = true;
+        });
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") $("modal").hidden = true;
+        });
+      })();
+    </script>
+  </body>
+</html>

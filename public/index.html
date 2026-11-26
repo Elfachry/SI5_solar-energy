@@ -3,69 +3,317 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
     <title>Solar Roof Estimator</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"
+    />
     <link rel="stylesheet" href="/css/estimator.css" />
   </head>
   <body>
-    <header class="topbar">
-      <a class="brand" href="/">SOLAR<span>ROOF</span></a>
-      <a class="simulation-link" href="/simulation">Live simulation →</a>
-    </header>
-    <main>
-      <section class="hero">
-        <div id="map" aria-label="Choose a location on the map"></div>
-        <div class="map-hint" id="mapHint">Click the map to choose a spot</div>
-        <button id="locate" class="locate" type="button">◎ Locate me</button>
-      </section>
+    <main class="map" id="map" aria-label="Map location picker"></main>
+    <div class="map-hint" id="mapHint">
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        aria-hidden="true"
+      >
+        <path d="M3 6 9 3l6 3 6-3v15l-6 3-6-3-6 3z" />
+        <path d="M9 3v15m6-12v15" />
+      </svg>
+      Click the map to choose a roof location
+    </div>
 
-      <section class="panel setup-card" aria-labelledby="setup-title">
-        <p class="eyebrow">SOLAR POTENTIAL</p>
-        <h1 id="setup-title">Estimate your roof's output</h1>
-        <p class="intro">Choose a location and enter the package you are considering.</p>
-        <form id="estimateForm" novalidate>
-          <label>Location
-            <output id="locationValue" class="location-value">Click the map to choose a spot</output>
-          </label>
-          <label for="systemWp">System size (Wp)
-            <input id="systemWp" inputmode="decimal" placeholder="1,000" autocomplete="off" />
-            <small id="sizeHelper" class="helper" hidden></small>
-            <small class="field-help">Total panel capacity of your package (kWp × 1,000)</small>
-          </label>
-          <label for="price">Electricity price per kWh
-            <span class="money-input"><select id="currency" aria-label="Currency"><option>Rp</option><option>$</option><option>€</option><option>RM</option><option>S$</option></select><input id="price" inputmode="decimal" value="1,444.70" /></span>
-          </label>
-          <label for="cost">System cost <span class="muted">(optional)</span>
-            <input id="cost" inputmode="decimal" placeholder="e.g. 33,600,000" />
-            <small class="field-help">Total installed price of your package</small>
-          </label>
-          <p id="validation" class="validation" role="alert"></p>
-          <button id="estimate" class="primary" type="submit" disabled>Estimate my solar output <span>→</span></button>
-        </form>
-      </section>
-
-      <section id="results" class="panel results-card" hidden aria-labelledby="results-title">
-        <div id="loading" class="skeleton" hidden><div></div><div></div><div></div></div>
-        <div id="errorState" class="error-state" hidden><h2>Couldn't load sunshine data for this spot.</h2><button id="retry" class="secondary" type="button">Try again</button></div>
-        <div id="resultContent" hidden>
-          <div class="result-heading"><div><p class="eyebrow">YOUR ESTIMATE</p><h2 id="results-title">A bright outlook</h2></div><span class="sun-mark">☼</span></div>
-          <div class="tiles">
-            <article class="tile"><span>Yearly energy</span><strong id="yearly"></strong><small id="daily"></small></article>
-            <article class="tile"><span>Yearly savings</span><strong id="savingsCompact"></strong><small id="savingsFull"></small></article>
-            <article class="tile"><span>Payback period</span><strong id="payback"></strong><small id="paybackSub"></small><em id="packageNote" hidden>Savings count electricity offset only. Extras in your package (e.g. battery backup) are not valued.</em></article>
+    <section class="panel setup" aria-labelledby="setup-title">
+      <header class="panel-head">
+        <h1 id="setup-title">Solar estimate</h1>
+        <a class="sim-link" href="/simulation">
+          Live simulation
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M5 12h14M12 5l7 7-7 7" />
+          </svg>
+        </a>
+      </header>
+      <form class="panel-body" id="estimateForm" novalidate>
+        <span class="label" id="locationLabel">Location</span>
+        <div
+          class="location"
+          id="location"
+          role="group"
+          aria-labelledby="locationLabel"
+        >
+          <span class="icon-box" aria-hidden="true"
+            ><svg
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            >
+              <path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z" />
+              <circle cx="12" cy="10" r="3" /></svg
+          ></span>
+          <div aria-live="polite">
+            <strong id="locationText">Choose a point on the map</strong>
+            <small id="coordinates">No location selected</small>
           </div>
-          <article class="co2-tile"><strong id="co2"></strong><span id="trees"></span></article>
-          <p id="range" class="range"></p>
-          <div class="chart-heading"><div><h3>Monthly production</h3><p id="chartLabel" class="chart-alt"></p></div><span id="chartTotal" class="chip"></span></div>
-          <div id="chart" class="bar-chart" tabindex="0" role="img"></div>
-          <p class="source-line">Solar data: NASA POWER (long-term monthly average at this location)</p>
-          <button id="howCalculated" class="text-button" type="button">How is this calculated? <span>→</span></button>
-          <p class="disclaimer"><i>Ideal estimate for a perfectly flat panel with no shade. Real output will usually be lower.</i></p>
         </div>
-      </section>
-    </main>
 
-    <dialog id="explainModal" aria-labelledby="modalTitle"><div class="modal-inner"><button id="closeModal" class="close" type="button" aria-label="Close">×</button><p class="eyebrow">THE SHORT VERSION</p><h2 id="modalTitle">How we calculate this</h2><div id="modalBody"></div><p class="disclaimer">This is an ideal estimate. Real output will usually be lower. Savings only count electricity you no longer buy. Battery backup and other package extras aren't valued here.</p></div></dialog>
+        <label class="label" for="watts">Panel output</label>
+        <div class="control">
+          <input id="watts" inputmode="decimal" autocomplete="off" /><span
+            class="unit"
+            >Wp</span
+          >
+        </div>
+
+        <label class="label" for="count">Number of panels</label>
+        <div class="stepper">
+          <button id="minus" type="button" aria-label="Decrease panel count">
+            −
+          </button>
+          <input id="count" inputmode="numeric" autocomplete="off" />
+          <button id="plus" type="button" aria-label="Increase panel count">
+            +
+          </button>
+        </div>
+        <small id="sizeHelper" class="hint hint-ok" hidden></small>
+
+        <label class="label" for="price">Electricity price</label>
+        <div class="control">
+          <select id="currency" aria-label="Currency">
+            <option>Rp</option>
+            <option>$</option>
+            <option>€</option>
+            <option>RM</option>
+            <option>S$</option>
+          </select>
+          <input id="price" inputmode="decimal" autocomplete="off" />
+          <span class="unit">/ kWh</span>
+        </div>
+
+        <label class="label" for="cost"
+          >System cost <span class="optional">(optional)</span></label
+        >
+        <div class="control">
+          <span class="unit" id="costUnit">Rp</span
+          ><input
+            id="cost"
+            inputmode="decimal"
+            placeholder="e.g. 33,600,000"
+            autocomplete="off"
+          />
+        </div>
+        <small class="hint">Total installed price of your package</small>
+
+        <p id="validation" class="validation" role="alert"></p>
+        <button id="estimate" class="primary" type="submit" disabled>
+          Calculate estimate
+        </button>
+      </form>
+    </section>
+
+    <section
+      class="panel results"
+      id="results"
+      hidden
+      aria-labelledby="results-title"
+    >
+      <header class="panel-head">
+        <h2 id="results-title">Estimated performance</h2>
+        <button
+          class="close"
+          id="close"
+          type="button"
+          aria-label="Close results"
+        >
+          ×
+        </button>
+      </header>
+      <div class="panel-body">
+        <div id="loading" class="skeleton" hidden aria-live="polite">
+          <div></div>
+          <div></div>
+          <div></div>
+        </div>
+        <div id="errorState" class="error-state" hidden>
+          <h3>Couldn't load sunshine data for this spot.</h3>
+          <button id="retry" class="secondary" type="button">Try again</button>
+        </div>
+        <div id="resultContent" hidden>
+          <div class="tiles">
+            <article class="tile">
+              <span class="tile-mark" aria-hidden="true"
+                ><svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                >
+                  <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" /></svg
+              ></span>
+              <span class="tile-label">Yearly energy</span>
+              <strong class="tile-value" id="yearly"></strong>
+              <span class="tile-note" id="daily"></span>
+            </article>
+            <article class="tile">
+              <span class="tile-mark" aria-hidden="true"
+                ><svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                >
+                  <path d="M7 17 17 7M8 7h9v9" /></svg
+              ></span>
+              <span class="tile-label">Yearly savings</span>
+              <strong class="tile-value" id="savingsCompact"></strong>
+              <span class="tile-note" id="savingsFull"></span>
+            </article>
+            <article class="tile">
+              <span class="tile-mark" aria-hidden="true"
+                ><svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                >
+                  <circle cx="12" cy="12" r="8.5" />
+                  <path d="M12 7v5l3 2" /></svg
+              ></span>
+              <span class="tile-label">Payback period</span>
+              <strong class="tile-value" id="payback"></strong>
+              <span class="tile-note" id="paybackSub"></span>
+            </article>
+          </div>
+          <div class="co2">
+            <span class="co2-icon" aria-hidden="true"
+              ><svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+              >
+                <path
+                  d="M12 20V9m0 4c-3.5 0-5.5-1.8-5.5-5 3.5 0 5.5 1.8 5.5 5Zm0-2c3.5 0 5.5-1.8 5.5-5-3.5 0-5.5 1.8-5.5 5Z"
+                />
+                <path d="M8 20h8" /></svg
+            ></span>
+            <div><strong id="co2"></strong><span>avoided per year</span></div>
+            <span class="trees" id="trees"></span>
+          </div>
+          <p id="range" class="range"></p>
+          <p id="packageNote" class="note" hidden>
+            Savings count electricity offset only. Extras in your package are
+            not valued.
+          </p>
+          <div class="chart-head">
+            <div>
+              <h3>Monthly production</h3>
+              <p id="chartLabel" class="chart-alt"></p>
+            </div>
+            <span id="chartTotal" class="pill"></span>
+          </div>
+          <div id="chart" class="chart" tabindex="0" role="img"></div>
+          <p class="source-line">
+            Solar data: NASA POWER (long-term monthly average at this location)
+          </p>
+          <button id="howCalculated" class="text-link" type="button">
+            How is this calculated?
+          </button>
+          <p class="disclaimer">
+            <i
+              >Ideal estimate for a perfectly flat panel with no shade. Real
+              output will usually be lower.</i
+            >
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <div class="map-controls">
+      <div class="zoom">
+        <button id="zoomIn" type="button" aria-label="Zoom in">+</button>
+        <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
+      </div>
+      <button id="locate" class="locate" type="button" aria-label="Locate me">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 2v4m0 12v4M2 12h4m12 0h4" />
+        </svg>
+      </button>
+    </div>
+    <div class="attribution">
+      <a
+        href="https://www.openstreetmap.org/copyright"
+        target="_blank"
+        rel="noopener"
+        >© OpenStreetMap contributors</a
+      >
+      ·
+      <a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>
+    </div>
+
+    <dialog id="explainModal" aria-labelledby="modalTitle">
+      <div class="modal-inner">
+        <div class="modal-head">
+          <h2 id="modalTitle">Estimate methodology</h2>
+          <button
+            id="closeModal"
+            class="close"
+            type="button"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+        <div id="modalBody"></div>
+        <p class="modal-note">
+          This is an ideal estimate. Real output will usually be lower. Savings
+          only count electricity you no longer buy. Battery backup and other
+          package extras aren't valued here.
+        </p>
+      </div>
+    </dialog>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     <script type="module" src="/js/estimator.js"></script>
   </body>
