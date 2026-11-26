@@ -1,27 +1,37 @@
 import express from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const app = express();
+const PUBLIC = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "public",
+);
 
 app.use(express.json());
 const readings = [];
 const solarCache = new Map();
 const MAX_CACHE_ENTRIES = 500;
 
-if (!process.env.VERCEL) {
-  app.get("/", (req, res) => res.sendFile("index.html", { root: "public" }));
-  app.get("/simulation", (req, res) =>
-    res.sendFile("simulation/index.html", { root: "public" }),
-  );
-  app.get("/simulation/", (req, res) =>
-    res.sendFile("simulation/index.html", { root: "public" }),
-  );
-  app.use(express.static("public"));
-}
+// Pages
+app.get(["/", "/simulation", "/simulation/"], (req, res) => {
+  const page = req.path === "/" ? "index.html" : "simulation/index.html";
+  res.sendFile(page, { root: PUBLIC });
+});
+
+// css, js and other files in public/
+app.use((req, res, next) => {
+  if (req.method !== "GET" || req.path.startsWith("/api/")) return next();
+  res.sendFile(req.path, { root: PUBLIC }, (err) => {
+    if (err && !res.headersSent) next();
+  });
+});
 
 const SOURCES = new Set(["sensor", "simulation"]);
 
 app.post("/api/readings", (req, res) => {
-  if (req.get("x-api-key") !== process.env.INGEST_KEY)
+  const key = process.env.INGEST_KEY;
+  if (!key || req.get("x-api-key") !== key)
     return res.status(401).json({ error: "unauthorized" });
 
   const { time, lux, volt, amp, source } = req.body ?? {};
@@ -70,6 +80,11 @@ app.get("/api/solar", async (req, res) => {
   const roundedLat = Math.round(lat.value * 100) / 100;
   const roundedLon = Math.round(lon.value * 100) / 100;
   const key = `${roundedLat},${roundedLon}`;
+
+  res.set(
+    "Cache-Control",
+    "public, s-maxage=86400, stale-while-revalidate=604800",
+  );
   if (solarCache.has(key)) return res.json(solarCache.get(key));
 
   const url = new URL(
@@ -125,20 +140,19 @@ app.get("/api/solar", async (req, res) => {
     solarCache.set(key, result);
     if (solarCache.size > MAX_CACHE_ENTRIES)
       solarCache.delete(solarCache.keys().next().value);
-    res.set(
-      "Cache-Control",
-      "public, s-maxage=86400, stale-while-revalidate=604800",
-    );
     return res.json(result);
   } catch (error) {
+    res.set("Cache-Control", "no-store"); // don't cache failures
     return res
       .status(502)
       .json({ error: "Solar data is temporarily unavailable" });
   }
 });
 
-if (process.env.NODE_ENV !== "test") {
-  app.listen(3000, () => console.log("http://localhost:3000"));
+// Local only. Vercel runs the exported app itself.
+if (process.env.NODE_ENV !== "test" && !process.env.VERCEL) {
+  const port = process.env.PORT || 3000;
+  app.listen(port, () => console.log(`http://localhost:${port}`));
 }
 
 export { app };
